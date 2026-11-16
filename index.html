@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>キャッシュ・フロー電卓</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#23477d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow column like a pocket ledger — shared conditions on top, one card per plan with its results directly beneath the inputs, then the differential plans. */
+:root{
+  --bg:#f3f4f6; --surface:#ffffff; --ink:#1b2230; --muted:#5d6676; --line:#dde1e7;
+  --accent:#23477d; --accent-soft:#e6ecf5; --field:#f7f8fa;
+  --good:#1d7a4c; --good-soft:#e3f2ea; --bad:#b4372f; --bad-soft:#f8e6e4;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --grid:#e6e8ec;
+  --f-ui:"IBM Plex Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1b212b; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2c3441;
+  --accent:#8fb0e6; --accent-soft:#25324a; --field:#151a22;
+  --good:#5cc994; --good-soft:#173527; --bad:#f08a80; --bad-soft:#3d1f1d; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --grid:#262d38; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1b212b; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2c3441;
+  --accent:#8fb0e6; --accent-soft:#25324a; --field:#151a22;
+  --good:#5cc994; --good-soft:#173527; --bad:#f08a80; --bad-soft:#3d1f1d; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --grid:#262d38; color-scheme:dark}
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.55;margin:0}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px 48px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em}
+.unit{font-size:12px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.card h2{font-size:13px;margin:0;color:var(--muted);font-weight:500;letter-spacing:.06em}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.inp{display:flex;align-items:center;background:var(--field);border:1px solid var(--line);border-radius:8px;padding:0 10px}
+.inp:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.inp input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font-family:var(--f-num);font-size:18px;padding:9px 0;outline:none;text-align:right}
+.inp span{font-size:12px;color:var(--muted);margin-left:6px;white-space:nowrap}
+.plan-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.plan-name{font-weight:700;font-size:16px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.icon-btn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;font:inherit;font-size:13px;padding:5px 10px;cursor:pointer}
+.icon-btn:hover{color:var(--ink)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.periods{display:flex;flex-direction:column;gap:6px}
+.prow{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:8px}
+.prow .t{font-size:12px;color:var(--muted);font-family:var(--f-num)}
+.prow .inp{min-width:0}
+.pm{flex:none;border:0;border-right:1px solid var(--line);background:transparent;color:var(--accent);font:600 17px var(--f-num);width:34px;align-self:stretch;margin:0 8px 0 -10px;border-radius:8px 0 0 8px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.pm:active{background:var(--accent-soft)}
+.prow .inp input{font-size:16px;padding:6px 0}
+.pbtns{display:flex;gap:8px;flex-wrap:wrap}
+.note{font-size:12px;color:var(--muted)}
+.cfd{margin:0 -4px}
+.cfd svg{display:block;width:100%;height:auto;overflow:visible}
+.cfd .ax{stroke:var(--muted);stroke-width:1}
+.cfd .up{stroke:var(--accent);fill:var(--accent)}
+.cfd .dn{stroke:var(--bad);fill:var(--bad)}
+.cfd .tl{fill:var(--muted);font:10px var(--f-num)}
+.cfd .vl{fill:var(--ink);font:10px var(--f-num)}
+.stale{opacity:.4}
+.res{border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.npv{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.npv .lab{font-size:12px;color:var(--muted)}
+.npv .val{font-family:var(--f-num);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.npv .val small{font-size:13px;font-weight:400;color:var(--muted);margin-left:4px}
+.big2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.big2 div{display:flex;flex-direction:column;min-width:0}
+.big2 .lab{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.big2 .val{font-family:var(--f-num);font-size:clamp(16px,5vw,24px);font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;display:flex;flex-direction:column;line-height:1.25}
+.big2 .val small{font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0}
+.chip{display:inline-block;font-size:12px;font-weight:500;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.neu{background:var(--accent-soft);color:var(--accent)}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.kv div{display:flex;flex-direction:column;min-width:0}
+.kv .k{font-size:11.5px;color:var(--muted)}
+.kv .v{font-family:var(--f-num);font-size:16px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kv .v .chip{font-family:var(--f-ui)}
+.kv.kv3{grid-template-columns:repeat(3,1fr);gap:8px 10px}
+.kv.kv3 .v{font-size:15px}
+.kv.main{padding-bottom:8px;border-bottom:1px solid var(--line)}
+.kv.main .v{font-size:19px;font-weight:600}
+.warn{font-size:12px;color:var(--bad)}
+.add{border:1.5px dashed var(--line);background:transparent;color:var(--accent);border-radius:12px;padding:12px;font:inherit;font-weight:500;cursor:pointer}
+.add:hover{border-color:var(--accent)}
+.diff{display:flex;flex-direction:column;gap:12px}
+.drow{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.drow:first-of-type{border-top:0;padding-top:0}
+.drow .ttl{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-weight:700}
+.examples{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.examples .note{margin-right:2px}
+.bal-wrap{position:relative}
+.bal-wrap svg{display:block;width:100%;height:auto;touch-action:pan-y}
+.bal-wrap .gl{stroke:var(--grid);stroke-width:1}
+.bal-wrap .zl{stroke:var(--muted);stroke-width:1}
+.bal-wrap .tk{fill:var(--muted);font:10px var(--f-num)}
+.bal-wrap .el{font:11px var(--f-ui);fill:var(--ink)}
+.bal-wrap .xh{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.s1{stroke:var(--s1);fill:var(--s1)} .s2{stroke:var(--s2);fill:var(--s2)} .s3{stroke:var(--s3);fill:var(--s3)}
+.bal-wrap .ln{fill:none;stroke-width:2;stroke-linejoin:round}
+.bal-wrap .pt{stroke:var(--surface);stroke-width:2}
+.tip{position:absolute;top:4px;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap}
+.tip b{font-weight:500}
+.tip .r{display:flex;align-items:center;gap:6px;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.sw{display:inline-block;width:10px;height:3px;border-radius:2px}
+.sw.s1{background:var(--s1)} .sw.s2{background:var(--s2)} .sw.s3{background:var(--s3)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+details summary{cursor:pointer;font-size:12.5px;color:var(--accent)}
+.tbl{overflow-x:auto;margin-top:8px}
+.tbl table{border-collapse:collapse;width:100%;font-family:var(--f-num);font-size:13px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{padding:4px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th{font-family:var(--f-ui);font-weight:500;color:var(--muted);font-size:12px}
+footer{font-size:11.5px;color:var(--muted);line-height:1.7}
+@media (prefers-reduced-motion:no-preference){.seg button,.add,.icon-btn{transition:background .15s,color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>キャッシュ・フロー電卓</h1>
+    <span class="unit">金額の単位：万円</span>
+  </header>
+
+  <section class="card" aria-labelledby="h-common">
+    <h2 id="h-common">共通条件</h2>
+    <div class="row2">
+      <label class="f" for="in-i">資本の利率 i
+        <span class="inp"><input id="in-i" inputmode="decimal" autocomplete="off"><span>%</span></span></label>
+    </div>
+  </section>
+
+  <div id="plans" style="display:flex;flex-direction:column;gap:14px"></div>
+  <button class="add" id="add-plan" type="button">＋ 案を追加して比較する</button>
+
+  <section class="card" id="bal-card" hidden aria-labelledby="h-bal">
+    <h2 id="h-bal">回収残高（万円）</h2>
+    <div class="legend" id="bal-legend"></div>
+    <div class="bal-wrap" id="bal-wrap"></div>
+    <details><summary>表で見る</summary><div class="tbl" id="bal-tbl"></div></details>
+  </section>
+
+  <section class="card" id="diff-card" hidden aria-labelledby="h-diff">
+    <h2 id="h-diff">差の案（初期投資の小さい順に比較）</h2>
+    <div class="diff" id="diff"></div>
+  </section>
+
+  <div class="examples">
+    <span class="note">例を読み込む：</span>
+    <button class="icon-btn" type="button" data-ex="basic">1案（1000・300）</button>
+    <button class="icon-btn" type="button" data-ex="uni">等報収 3案</button>
+    <button class="icon-btn" type="button" data-ex="gen">一般型 2案</button>
+  </div>
+
+  <footer>
+    回収期間は割引回収期間です。報収が均等な場合は N = −ln(1 − iC/R) / ln(1 + i)（ExcelのNPERと同じ）、不均等な場合は回収残高を線形補間して求めます。正味年価・正味終価・必要回収額は各案の期間 n で換算しています。入力した値はこの端末に保存されます。
+  </footer>
+</div>
+
+<script>
+(function(){
+const KEY="cfcalc-v1";
+const NAMES=["A","B","C"];
+const EX={
+  basic:{i:"10",plans:[{type:"u",C:"-1000",R:"300",n:"10",cf:[]}]},
+  uni:{i:"8",plans:[{type:"u",C:"-1500",R:"350",n:"6",cf:[]},{type:"u",C:"-3000",R:"650",n:"6",cf:[]},{type:"u",C:"-4500",R:"900",n:"6",cf:[]}]},
+  gen:{i:"10",plans:[
+    {type:"g",C:"-1500",R:"450",cf:["450","350","330","350","400","350","350","350"]},
+    {type:"g",C:"-3000",R:"900",cf:["900","890","1000","650","1200","650","600","800","900","900","900"]}]}
+};
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
+if(!S||!Array.isArray(S.plans)||!S.plans.length) S=JSON.parse(JSON.stringify(EX.basic));
+S.plans.forEach(p=>{if(p.n==null)p.n=p.type==="g"?String(p.cf.length):(S.n??"10")});delete S.n;
+
+const $=id=>document.getElementById(id);
+const num=s=>{
+  const t=String(s??"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[．。]/g,".").replace(/[−－ー‐‑–—]/g,"-").replace(/[,，、\s　％%]/g,"");
+  if(!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(t))return NaN;
+  const v=parseFloat(t);return isFinite(v)?v:NaN};
+let LAST=[];
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function fmt(x,d){if(!isFinite(x))return"—";const s=Math.abs(x).toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d});return(x<0&&Number(s.replace(/,/g,""))!==0?"−":"")+s}
+
+/* ---- finance ---- */
+const npvAt=(r,cf)=>cf.reduce((a,c,t)=>a+c/Math.pow(1+r,t),0);
+const PM=(i,n)=>i===0?1/n:i*Math.pow(1+i,n)/(Math.pow(1+i,n)-1);
+function irrs(cf){
+  if(!cf.some(c=>c>0)||!cf.some(c=>c<0))return[];
+  const roots=[];let r0=-0.99,f0=npvAt(r0,cf);
+  for(let k=1;k<=12000;k++){
+    const r1=-0.99+k*0.001,f1=npvAt(r1,cf);
+    if(f1===0){roots.push(r1)}
+    else if(f0*f1<0){let a=r0,b=r1,fa=f0;for(let j=0;j<80;j++){const m=(a+b)/2,fm=npvAt(m,cf);if(fa*fm<=0){b=m}else{a=m;fa=fm}}roots.push((a+b)/2)}
+    r0=r1;f0=f1;
+  }
+  return roots;
+}
+function pbp(cf,i){
+  const C=-cf[0],rets=cf.slice(1);
+  if(C<=0)return{v:0};
+  const uniform=rets.length>0&&rets.every(x=>Math.abs(x-rets[0])<1e-9);
+  if(uniform){
+    const R=rets[0];
+    if(R<=0)return{v:NaN,msg:"回収不能"};
+    if(i===0)return{v:C/R,how:"式"};
+    const q=i*C/R;
+    if(q>=1)return{v:NaN,msg:"回収不能"};
+    return{v:-Math.log(1-q)/Math.log(1+i),how:"式"};
+  }
+  // 回収残高が最後に負から0以上へ転じた点を回収期間とする（その後再び負になれば未回収）
+  let b=cf[0],v=NaN;
+  for(let t=1;t<cf.length;t++){
+    const nb=b*(1+i)+cf[t];
+    if(b<0&&nb>=0)v=(t-1)+(-b)/(nb-b);
+    else if(nb<0)v=NaN;
+    b=nb;
+  }
+  return isFinite(v)?{v,how:"補間"}:{v:NaN,msg:"回収不能"};
+}
+function cfOf(p){
+  const C=num(p.C);
+  if(p.type==="u"){const R=num(p.R),n=Math.round(num(p.n));if(!isFinite(C)||!isFinite(R)||!(n>=1))return null;return[C,...Array(n).fill(R)]}
+  if(!isFinite(C)||!p.cf.length)return null;
+  const r=p.cf.map(v=>{const x=num(v);return isFinite(x)?x:0});
+  return[C,...r];
+}
+function evaluate(cf,i){
+  const n=cf.length-1,npv=npvAt(i,cf),f=Math.pow(1+i,n),pm=PM(i,n);
+  const pvRet=npv+(-cf[0]);
+  return{n,npv,ann:npv*pm,fut:npv*f,allow:-pvRet,need:-cf[0]*pm,irr:irrs(cf),pb:pbp(cf,i)};
+}
+
+/* ---- rendering ---- */
+function chip(cls,t){return`<span class="chip ${cls}">${t}</span>`}
+function npvChip(v){return Math.abs(v)<0.05?chip("neu","損益なし"):v>0?chip("good","ペイする"):chip("bad","ペイしない")}
+
+function renderPlans(){
+  const box=$("plans");box.innerHTML="";
+  S.plans.forEach((p,k)=>{
+    const el=document.createElement("section");el.className="card";el.dataset.k=k;
+    const nm=NAMES[k];
+    let body=`<div class="plan-head">
+      <span class="plan-name">案${nm}</span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <span class="seg" role="group" aria-label="報収の入力方式">
+          <button type="button" data-act="type" data-v="u" aria-pressed="${p.type==="u"}">等報収</button>
+          <button type="button" data-act="type" data-v="g" aria-pressed="${p.type==="g"}">一般型</button>
+        </span>
+        ${S.plans.length>1?`<button class="icon-btn" type="button" data-act="del" aria-label="案${nm}を削除">削除</button>`:""}
+      </span></div>`;
+    if(p.type==="u"){
+      body+=`<div class="row2">
+        <label class="f" for="C-${k}">初期投資 C<span class="inp"><button type="button" class="pm" aria-label="符号を切り替え">±</button><input id="C-${k}" data-f="C" inputmode="decimal" autocomplete="off" value="${esc(p.C)}"><span>万円</span></span></label>
+        <label class="f" for="R-${k}">毎期末の報収 R<span class="inp"><button type="button" class="pm" aria-label="符号を切り替え">±</button><input id="R-${k}" data-f="R" inputmode="decimal" autocomplete="off" value="${esc(p.R)}"><span>万円/年</span></span></label>
+        <label class="f" for="n-${k}">計画期間 n<span class="inp"><input id="n-${k}" data-f="n" inputmode="numeric" autocomplete="off" value="${esc(p.n??"")}"><span>年</span></span></label>
+      </div>`;
+    }else{
+      body+=`<div class="periods"><div class="prow"><span class="t">0年目</span><span class="inp"><button type="button" class="pm" aria-label="符号を切り替え">±</button><input id="C-${k}" data-f="C" inputmode="decimal" autocomplete="off" value="${esc(p.C)}" aria-label="0年目"><span>万円</span></span></div>${p.cf.map((v,t)=>`<div class="prow"><span class="t">${t+1}年目</span><span class="inp"><button type="button" class="pm" aria-label="符号を切り替え">±</button><input id="cf-${k}-${t}" data-f="cf" data-t="${t}" inputmode="decimal" autocomplete="off" value="${esc(v)}" aria-label="${t+1}年目"><span>万円</span></span></div>`).join("")}</div>
+      <div class="pbtns">
+        <button class="icon-btn" type="button" data-act="addp">＋1年（前年と同額）</button>
+        ${p.cf.length>1?`<button class="icon-btn" type="button" data-act="delp">最後の年を削除</button>`:""}
+        <span class="note" style="align-self:center">期間 n = ${p.cf.length}年</span>
+      </div>`;
+    }
+    body+=`<div class="cfd" id="cfd-${k}" aria-label="キャッシュ・フロー図"></div><div class="res" id="res-${k}"></div>`;
+    el.innerHTML=body;box.appendChild(el);
+  });
+  $("add-plan").hidden=S.plans.length>=3;
+  compute();
+}
+
+function irrText(irr){return irr.length?irr.map(x=>fmt(x*100,2)+" %").join(" / "):"なし"}
+function pbText(pb){return isFinite(pb.v)?fmt(pb.v,2)+" 年":pb.msg}
+function resultHTML(r){
+  if(!r)return`<div class="note">数値を入力すると結果が表示されます。</div>`;
+  return`<div class="big2">
+    <div><span class="lab">正味現価</span><span class="val">${fmt(r.npv,1)}<small>万円</small></span></div>
+    <div><span class="lab">正味年価</span><span class="val">${fmt(r.ann,1)}<small>万円/年</small></span></div>
+    <div><span class="lab">正味終価</span><span class="val">${fmt(r.fut,1)}<small>万円</small></span></div>
+  </div>
+  <div class="kv main">
+    <div><span class="k">投資利益率（IRR）</span><span class="v">${irrText(r.irr)}</span></div>
+    <div><span class="k">割引回収期間（PBP）</span><span class="v">${pbText(r.pb)}</span></div>
+  </div>
+  <div class="kv">
+    <div><span class="k">許容投資額</span><span class="v">${fmt(r.allow,1)}</span></div>
+    <div><span class="k">必要回収額（/年）</span><span class="v">${fmt(r.need,1)}</span></div>
+  </div>`;
+}
+
+function cfDiagram(cf){
+  const n=cf.length-1,W=340,padL=14,padR=14,top=16,Hd=104,bottom=18;
+  const up=Math.max(0,...cf),dn=Math.max(0,...cf.map(v=>-v));
+  if(up+dn===0)return"";
+  const sc=Hd/(up+dn),y0=top+up*sc,H=top+Hd+bottom;
+  const dx=(W-padL-padR)/Math.max(n,1),X=t=>padL+t*dx;
+  const showVal=t=>n<=10||t===0||(t===1&&cf.slice(1).every(v=>v===cf[1]));
+  const step=n<=12?1:n<=24?2:5;
+  const lab=v=>{const a=Math.abs(v);return a.toLocaleString("ja-JP",{maximumFractionDigits:1})};
+  const hw=Math.min(3,dx*0.2);
+  let g=`<line class="ax" x1="${padL-6}" y1="${y0}" x2="${W-padR+6}" y2="${y0}"/>`;
+  cf.forEach((v,t)=>{
+    const x=X(t);
+    if(v!==0){
+      const y=y0-v*sc,cls=v>0?"up":"dn",sw=Math.min(2,Math.max(1,dx*0.12));
+      g+=`<line class="${cls}" x1="${x}" y1="${y0}" x2="${x}" y2="${y}" stroke-width="${sw}"/>`;
+      g+=`<line class="${cls}" x1="${x-hw}" y1="${y}" x2="${x+hw}" y2="${y}" stroke-width="${sw}" stroke-linecap="square"/>`;
+      if(showVal(t))g+=`<text class="vl" x="${x}" y="${v>0?y-4:y+11}" text-anchor="middle">${v<0?"−":""}${lab(v)}</text>`;
+    }
+    if(t%step===0||t===n)g+=`<text class="tl" x="${x}" y="${v<0?y0-4:y0+12}" text-anchor="middle">${t}</text>`;
+  });
+  return`<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+}
+
+function balances(cf,i){const b=[];let x=0;cf.forEach((c,t)=>{x=t===0?c:x*(1+i)+c;b.push(x)});return b}
+function niceTicks(lo,hi,n){const span=hi-lo||1,raw=span/n,mag=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/mag;
+  const st=(f<1.5?1:f<3?2:f<7?5:10)*mag,t=[];for(let v=Math.floor(lo/st)*st;;v+=st){t.push(Math.round(v/st)*st);if(v>=hi-st*1e-9||t.length>50)break}return t}
+let BAL=null;
+function drawBal(series){
+  const card=$("bal-card");
+  if(!series.length){card.hidden=true;BAL=null;return}
+  card.hidden=false;
+  $("bal-legend").innerHTML=series.map(s=>`<span><i class="sw s${s.k+1}"></i>案${NAMES[s.k]}</span>`).join("");
+  const W=340,H=210,pL=46,pR=34,pT=10,pB=22;
+  const N=Math.max(...series.map(s=>s.b.length-1),1);
+  const all=series.flatMap(s=>s.b).concat([0]);
+  const tk=niceTicks(Math.min(...all),Math.max(...all),5),y0=tk[0],y1=tk[tk.length-1];
+  const X=t=>pL+t*(W-pL-pR)/N,Y=v=>pT+(y1-v)/(y1-y0||1)*(H-pT-pB);
+  let g="";
+  tk.forEach(v=>{g+=`<line class="${v===0?"zl":"gl"}" x1="${pL}" x2="${W-pR}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tk" x="${pL-6}" y="${Y(v)+3.5}" text-anchor="end">${fmt(v,0)}</text>`});
+  const step=N<=12?1:N<=24?2:5;
+  for(let t=0;t<=N;t++)if(t%step===0||t===N)g+=`<text class="tk" x="${X(t)}" y="${H-6}" text-anchor="middle">${t}</text>`;
+  const ends=[];
+  series.forEach(s=>{
+    const c="s"+(s.k+1);
+    g+=`<polyline class="ln ${c}" style="fill:none" points="${s.b.map((v,t)=>X(t)+","+Y(v)).join(" ")}"/>`;
+    if(N<=15)s.b.forEach((v,t)=>{g+=`<circle class="pt ${c}" style="stroke:var(--surface)" cx="${X(t)}" cy="${Y(v)}" r="3.5"/>`});
+    ends.push({x:X(s.b.length-1),y:Y(s.b[s.b.length-1]),k:s.k});
+  });
+  ends.sort((a,b)=>a.y-b.y);for(let j=1;j<ends.length;j++)if(ends[j].x===ends[j-1].x&&ends[j].y-ends[j-1].y<12)ends[j].y=ends[j-1].y+12;
+  ends.forEach(e=>{g+=`<text class="el" x="${e.x+7}" y="${e.y+4}">${NAMES[e.k]}</text>`});
+  g+=`<line class="xh" id="bal-xh" x1="0" x2="0" y1="${pT}" y2="${H-pB}" visibility="hidden"/><rect id="bal-hit" x="${pL-10}" y="0" width="${W-pL-pR+20}" height="${H}" fill="transparent"/>`;
+  $("bal-wrap").innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="各案の回収残高の推移">${g}</svg><div class="tip" id="bal-tip" hidden></div>`;
+  BAL={series,N,X,W};
+  const svg=$("bal-wrap").querySelector("svg"),tip=$("bal-tip"),xh=$("bal-xh");
+  const show=ev=>{
+    const r=svg.getBoundingClientRect(),sx=(ev.clientX-r.left)*W/r.width;
+    const t=Math.max(0,Math.min(N,Math.round((sx-pL)/((W-pL-pR)/N))));
+    xh.setAttribute("x1",X(t));xh.setAttribute("x2",X(t));xh.setAttribute("visibility","visible");
+    tip.innerHTML=`<b>${t}年目</b>`+series.map(s=>`<div class="r"><i class="sw s${s.k+1}"></i>${t<s.b.length?fmt(s.b[t],1):"—"}</div>`).join("");
+    tip.hidden=false;const px=X(t)*r.width/W,tw=tip.offsetWidth;
+    tip.style.left=Math.max(0,Math.min(r.width-tw,px+(px>r.width/2?-tw-10:10)))+"px";
+  };
+  const hide=()=>{tip.hidden=true;xh.setAttribute("visibility","hidden")};
+  svg.addEventListener("pointermove",show);svg.addEventListener("pointerdown",show);svg.addEventListener("pointerleave",hide);
+  // table
+  let h=`<table><thead><tr><th>年</th>${series.map(s=>`<th>案${NAMES[s.k]}</th>`).join("")}</tr></thead><tbody>`;
+  for(let t=0;t<=N;t++)h+=`<tr><th>${t}</th>${series.map(s=>`<td>${t<s.b.length?fmt(s.b[t],1):"—"}</td>`).join("")}</tr>`;
+  $("bal-tbl").innerHTML=h+"</tbody></table>";
+}
+
+function compute(){
+  const i=num(S.i)/100;
+  const ok=isFinite(i)&&i>-1;
+  // 入力途中（欄が空など）の案は、直前に計算できた結果を薄く表示したまま残す
+  const stale=[];
+  const cfs=S.plans.map((p,k)=>{const cf=ok?cfOf(p):null;if(cf){LAST[k]=cf;stale[k]=false;return cf}stale[k]=!!LAST[k];return LAST[k]||null});
+  const iv=ok?i:(LAST.i??0);if(ok)LAST.i=i;
+  cfs.forEach((cf,k)=>{const d=$("cfd-"+k);if(d){d.innerHTML=cf?cfDiagram(cf):"";d.classList.toggle("stale",!!stale[k]||!ok)}const el=$("res-"+k);if(el){el.innerHTML=resultHTML(cf?evaluate(cf,iv):null);el.classList.toggle("stale",!!stale[k]||!ok)}});
+  drawBal(cfs.map((cf,k)=>cf?{k,b:balances(cf,iv)}:null).filter(Boolean));
+  // differential plans
+  const dc=$("diff-card"),dv=$("diff");
+  const valid=S.plans.map((p,k)=>({k,cf:cfs[k]})).filter(o=>o.cf);
+  if(S.plans.length<2||valid.length<2){dc.hidden=true;save();return}
+  valid.sort((a,b)=>(-a.cf[0])-(-b.cf[0])||a.k-b.k);
+  let h="";
+  for(let j=1;j<valid.length;j++){
+    const lo=valid[j-1],hi=valid[j],L=Math.max(lo.cf.length,hi.cf.length);
+    const d=Array.from({length:L},(_,t)=>(hi.cf[t]||0)-(lo.cf[t]||0));
+    const name=`案${NAMES[hi.k]} − 案${NAMES[lo.k]}`;
+    const dC=-d[0],r=evaluate(d,iv),pos=dC>0;
+    const uni=d.length>1&&d.slice(1).every(x=>Math.abs(x-d[1])<1e-9);
+    h+=`<div class="drow">
+      <div class="ttl">${name}</div>
+      <div class="kv">
+        <div><span class="k">追加投資額</span><span class="v">${fmt(d[0],1)}</span></div>
+        <div><span class="k">追加報収（/年）</span><span class="v">${uni?fmt(d[1],1):"—"}</span></div>
+        <div><span class="k">追加投資利益率</span><span class="v">${pos?irrText(r.irr):"—"}</span></div>
+        <div><span class="k">追加回収期間</span><span class="v">${pos?pbText(r.pb):"—"}</span></div>
+        <div><span class="k">差の正味現価</span><span class="v">${fmt(r.npv,1)}</span></div>
+        <div><span class="k">差の正味年価（/年）</span><span class="v">${fmt(r.ann,1)}</span></div>
+      </div></div>`;
+  }
+  dv.innerHTML=h;dc.hidden=false;save();
+}
+
+/* ---- events ---- */
+$("in-i").value=S.i;
+$("in-i").addEventListener("input",e=>{S.i=e.target.value;compute()});
+$("plans").addEventListener("input",e=>{
+  const t=e.target,card=t.closest("[data-k]");if(!card)return;
+  const p=S.plans[+card.dataset.k];
+  if(t.dataset.f==="cf")p.cf[+t.dataset.t]=t.value;else p[t.dataset.f]=t.value;
+  compute();
+});
+$("plans").addEventListener("click",e=>{
+  const pm=e.target.closest(".pm");
+  if(pm){const inp=pm.parentElement.querySelector("input");let v=inp.value.trim();
+    inp.value=/^[-−－ー]/.test(v)?v.replace(/^[-−－ー]+/,""):"-"+v;
+    inp.dispatchEvent(new Event("input",{bubbles:true}));
+    if(inp.value==="-"){inp.focus();try{inp.setSelectionRange(1,1)}catch(_){}}
+    return}
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const k=+b.closest("[data-k]").dataset.k,p=S.plans[k];
+  const act=b.dataset.act;
+  if(act==="type"){
+    const v=b.dataset.v;if(p.type===v)return;
+    if(v==="g"){const n=Math.max(1,Math.min(50,Math.round(num(p.n))||1));if(!p.cf.length)p.cf=Array(n).fill(p.R)}
+    else{p.R=p.cf.length?p.cf[0]:p.R;p.n=String(p.cf.length||p.n||"")}
+    p.type=v;
+  }else if(act==="del"){S.plans.splice(k,1);LAST.splice(k,1)}
+  else if(act==="addp"){p.cf.push(p.cf.length?p.cf[p.cf.length-1]:p.R)}
+  else if(act==="delp"){p.cf.pop()}
+  renderPlans();
+  if(act==="addp"){const last=$(`cf-${k}-${p.cf.length-1}`);last&&last.focus()}
+});
+$("add-plan").addEventListener("click",()=>{
+  if(S.plans.length>=3)return;
+  const last=S.plans[S.plans.length-1];
+  S.plans.push({type:last.type,C:"",R:"",n:last.n??"",cf:last.type==="g"?last.cf.map(()=>""):[]});
+  renderPlans();
+  const c=$(`C-${S.plans.length-1}`);c&&c.focus();
+});
+document.querySelectorAll("[data-ex]").forEach(b=>b.addEventListener("click",()=>{
+  S=JSON.parse(JSON.stringify(EX[b.dataset.ex]));LAST=[];
+  $("in-i").value=S.i;renderPlans();window.scrollTo({top:0});
+}));
+renderPlans();
+})();
+</script>
+</body>
+</html>
